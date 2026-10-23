@@ -1,0 +1,13 @@
+[Unit]
+Description=Grow the Btrfs root partition to fill the disk (first boot)
+ConditionPathExists=!/var/lib/firefly-growroot.done
+After=local-fs.target
+Before=lightdm.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/firefly-growroot
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

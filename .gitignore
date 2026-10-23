@@ -1,0 +1,7 @@
+output/*.img
+output/*.img.zst
+output/*.log
+cache/*.raw.xz
+cache/*CHECKSUM
+__pycache__/
+output/SHA256SUMS
