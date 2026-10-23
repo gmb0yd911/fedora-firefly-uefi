@@ -25,10 +25,14 @@ BOOT_SIZE_MIB=1024
 DTB_PATH="rockchip/rk3588-firefly-itx-3588j.dtb"
 EXTRA_KERNEL_ARGS="${EXTRA_KERNEL_ARGS:-console=ttyS2,1500000n8 console=tty0}"
 # HDMI0's DDC read fails on this board, so supply the monitor's EDID.
+# The default is the Dell P2720DC EDID with its 2560x1440 timing moved from
+# 241.5 to 240.0 MHz: the 7.2 HDPTX PHY has no table entry for 241.5 MHz,
+# and its computed fractional PLL setting causes red pixel sparkles. 240 MHz
+# uses an integer divider (59.58 Hz, within the monitor's 49-75 Hz range).
 # EDID_FILE= (empty) disables the override.
-EDID_FILE="${EDID_FILE-${CONFIG_DIR}/edid/dell_p2720dc.bin}"
+EDID_FILE="${EDID_FILE-${CONFIG_DIR}/edid/dell_p2720dc-240mhz.bin}"
 HDMI_CONNECTOR="${HDMI_CONNECTOR:-HDMI-A-1}"
-HDMI_MODE="${HDMI_MODE:-2560x1440@60}"
+HDMI_MODE="${HDMI_MODE:-2560x1440}"
 if [[ -n "${EDID_FILE}" ]]; then
   [[ -f "${EDID_FILE}" ]] || { echo "Error: EDID file ${EDID_FILE} not found." >&2; exit 1; }
   EDID_NAME=$(basename "${EDID_FILE}")

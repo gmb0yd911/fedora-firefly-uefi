@@ -41,15 +41,25 @@ firmware tree instead, press `e` in the GRUB menu and delete the
 
 Kernel arguments (`/etc/kernel/cmdline` and `GRUB_CMDLINE_LINUX`):
 `root=UUID=… ro rootflags=subvol=@ console=ttyS2,1500000n8 console=tty0
-drm.edid_firmware=HDMI-A-1:edid/dell_p2720dc.bin video=HDMI-A-1:2560x1440@60`.
+drm.edid_firmware=HDMI-A-1:edid/dell_p2720dc-240mhz.bin video=HDMI-A-1:2560x1440`.
 
 ## HDMI
 
 The mainline driver takes over HDMI0 from EDK2 without the vendor kernel's
 clock holds. Its DDC (EDID) read fails on this board (`i2c read error`,
-then a 1024x768 fallback), so the image supplies the Dell P2720DC EDID from
-`config/edid/` in `/usr/lib/firmware/edid/` and the initramfs. For another
-monitor, set `EDID_FILE`, `HDMI_MODE`, or `EDID_FILE=` to disable it.
+then a 1024x768 fallback), so the image supplies the monitor's EDID from
+`config/edid/` in `/usr/lib/firmware/edid/` and the initramfs.
+
+The default `dell_p2720dc-240mhz.bin` is the Dell P2720DC EDID
+(`dell_p2720dc.bin`) with its 2560x1440 timing changed from 241.50 to
+240.00 MHz (59.58 Hz) and the checksum corrected. The 7.2 HDPTX PHY driver
+has no table entry for 241.5 MHz; its computed fractional PLL setting
+produced flickering red pixels. 240 MHz uses an integer divider
+(24 MHz × 100). 1920x1080 at 148.5 MHz (a table rate) was also clean.
+
+For another monitor, set `EDID_FILE` and `HDMI_MODE`, preferring a pixel
+clock in the driver's table or a multiple of 2.4 MHz; `EDID_FILE=`
+disables the override.
 
 ## Build
 
@@ -70,8 +80,8 @@ The builder prompts for the Fedora user's password. Settings:
 | `FEDORA_HOSTNAME` | `firefly-fedora` |
 | `UPDATE_SYSTEM` | `1` (`dnf upgrade` during build) |
 | `EXTRA_KERNEL_ARGS` | `console=ttyS2,1500000n8 console=tty0` |
-| `EDID_FILE` | `config/edid/dell_p2720dc.bin`; empty disables the override |
-| `HDMI_CONNECTOR` / `HDMI_MODE` | `HDMI-A-1` / `2560x1440@60` |
+| `EDID_FILE` | `config/edid/dell_p2720dc-240mhz.bin`; empty disables the override |
+| `HDMI_CONNECTOR` / `HDMI_MODE` | `HDMI-A-1` / `2560x1440` |
 | `IMG_SIZE_MIB` | `16384` |
 
 Output: `output/fedora-44-cinnamon-firefly-itx3588j-uefi-btrfs.img` (sparse,
