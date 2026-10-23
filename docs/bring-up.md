@@ -17,21 +17,33 @@
 
 Image build success and these checks do not establish a hardware boot.
 
-## Not yet validated on hardware
+## Open items before first boot (historical)
 
 - Booting Fedora's mainline kernel through EDK2 v1.1 with a GRUB-supplied
   device tree.
-- HDMI with HDMI connected during firmware start. The vendor 6.1 kernel
-  needed seven VOP clock holds (`../firefly-itx3588j/docs/uefi-hdmi-investigation.md`);
-  the mainline `dw-hdmi-qp` driver's handoff behaviour on this board is
-  unknown. If the screen goes dark or the board resets during boot, boot with
-  HDMI unplugged, connect it after the greeter starts, and check over SSH.
 - Ethernet MAC addresses: the replacement tree has no firmware-assigned MACs,
   so NetworkManager derives a stable one per machine; the DHCP address will
   differ from Omarchy's.
 - Shim fallback writing a boot entry: EFI variable writes from Linux do not
   persist with this eMMC-backed firmware, but fallback runs before
   ExitBootServices, where writes are saved on reset.
+
+## Hardware validation (2026-10-23)
+
+Booted from the SATA SSD (reached at 192.168.4.227) through EDK2 v1.1 with
+HDMI connected:
+
+- Kernel 7.2.11-200.fc44 with the GRUB-supplied Fedora DTB; UEFI; SELinux
+  enforcing, no AVC denials; system `running`, no failed units.
+- Btrfs root on `/dev/sda3` with all five subvolumes; growroot expanded it to
+  237 GiB; scrub found no errors.
+- Panthor initialized the Mali-G610; `end0` up via DHCP.
+- Native rockchip-drm bound VOP2 and HDMI0 with no handoff panic. DDC EDID
+  reads failed, giving 1024x768. With the EDID override, after a reboot
+  HDMI-A-1 runs 2560x1440@60 (241.5 MHz pixel clock); LightDM greeter on Xorg.
+- Not validated: HDMI1, DP, audio, suspend, PCIe/NVMe, the second GMAC.
+- The SSD reports 3 reallocated and 3 pending sectors at 226 power-on hours
+  (SMART PASSED, empty error log). Monitor with `smartctl -A /dev/sda`.
 
 ## Unlabeled files (fixed 2026-10-23)
 

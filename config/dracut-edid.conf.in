@@ -1,0 +1,2 @@
+# Include the HDMI EDID override in case display drivers load from the initramfs.
+install_items+=" /usr/lib/firmware/edid/@EDID_NAME@ "

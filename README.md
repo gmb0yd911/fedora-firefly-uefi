@@ -40,7 +40,16 @@ firmware tree instead, press `e` in the GRUB menu and delete the
 `devicetree` line.
 
 Kernel arguments (`/etc/kernel/cmdline` and `GRUB_CMDLINE_LINUX`):
-`root=UUID=… rootflags=subvol=@ rw console=ttyS2,1500000n8 console=tty0`.
+`root=UUID=… ro rootflags=subvol=@ console=ttyS2,1500000n8 console=tty0
+drm.edid_firmware=HDMI-A-1:edid/dell_p2720dc.bin video=HDMI-A-1:2560x1440@60`.
+
+## HDMI
+
+The mainline driver takes over HDMI0 from EDK2 without the vendor kernel's
+clock holds. Its DDC (EDID) read fails on this board (`i2c read error`,
+then a 1024x768 fallback), so the image supplies the Dell P2720DC EDID from
+`config/edid/` in `/usr/lib/firmware/edid/` and the initramfs. For another
+monitor, set `EDID_FILE`, `HDMI_MODE`, or `EDID_FILE=` to disable it.
 
 ## Build
 
@@ -61,6 +70,8 @@ The builder prompts for the Fedora user's password. Settings:
 | `FEDORA_HOSTNAME` | `firefly-fedora` |
 | `UPDATE_SYSTEM` | `1` (`dnf upgrade` during build) |
 | `EXTRA_KERNEL_ARGS` | `console=ttyS2,1500000n8 console=tty0` |
+| `EDID_FILE` | `config/edid/dell_p2720dc.bin`; empty disables the override |
+| `HDMI_CONNECTOR` / `HDMI_MODE` | `HDMI-A-1` / `2560x1440@60` |
 | `IMG_SIZE_MIB` | `16384` |
 
 Output: `output/fedora-44-cinnamon-firefly-itx3588j-uefi-btrfs.img` (sparse,

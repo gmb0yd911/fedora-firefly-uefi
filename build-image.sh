@@ -24,6 +24,16 @@ BOOT_SIZE_MIB=1024
 
 DTB_PATH="rockchip/rk3588-firefly-itx-3588j.dtb"
 EXTRA_KERNEL_ARGS="${EXTRA_KERNEL_ARGS:-console=ttyS2,1500000n8 console=tty0}"
+# HDMI0's DDC read fails on this board, so supply the monitor's EDID.
+# EDID_FILE= (empty) disables the override.
+EDID_FILE="${EDID_FILE-${CONFIG_DIR}/edid/dell_p2720dc.bin}"
+HDMI_CONNECTOR="${HDMI_CONNECTOR:-HDMI-A-1}"
+HDMI_MODE="${HDMI_MODE:-2560x1440@60}"
+if [[ -n "${EDID_FILE}" ]]; then
+  [[ -f "${EDID_FILE}" ]] || { echo "Error: EDID file ${EDID_FILE} not found." >&2; exit 1; }
+  EDID_NAME=$(basename "${EDID_FILE}")
+  EXTRA_KERNEL_ARGS+=" drm.edid_firmware=${HDMI_CONNECTOR}:edid/${EDID_NAME} video=${HDMI_CONNECTOR}:${HDMI_MODE}"
+fi
 FEDORA_HOSTNAME="${FEDORA_HOSTNAME:-firefly-fedora}"
 FEDORA_USER="${FEDORA_USER:-${SUDO_USER:-fedora}}"
 UPDATE_SYSTEM="${UPDATE_SYSTEM:-1}"
@@ -215,6 +225,10 @@ install -Dm644 "${CONFIG_DIR}/dracut-build-generic.conf" "${DST}/etc/dracut.conf
 install -Dm644 "${CONFIG_DIR}/NetworkManager-stable-mac.conf" "${DST}/etc/NetworkManager/conf.d/90-firefly-stable-mac.conf"
 install -Dm755 "${CONFIG_DIR}/firefly-growroot.sh" "${DST}/usr/local/sbin/firefly-growroot"
 install -Dm644 "${CONFIG_DIR}/firefly-growroot.service" "${DST}/etc/systemd/system/firefly-growroot.service"
+if [[ -n "${EDID_FILE}" ]]; then
+  install -Dm644 "${EDID_FILE}" "${DST}/usr/lib/firmware/edid/${EDID_NAME}"
+  sed "s|@EDID_NAME@|${EDID_NAME}|" "${CONFIG_DIR}/dracut-edid.conf.in" > "${DST}/etc/dracut.conf.d/90-firefly-edid.conf"
+fi
 echo "${FEDORA_HOSTNAME}" > "${DST}/etc/hostname"
 
 # --- 5. Packages and accounts inside the aarch64 chroot ---------------------------
