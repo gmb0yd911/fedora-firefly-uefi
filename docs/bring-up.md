@@ -43,7 +43,7 @@ HDMI connected:
   2560x1440@59.95 (241.5 MHz) with flickering red pixels; 1920x1080 at
   148.5 MHz and 2560x1440 at 240.0 MHz were clean. With the 240 MHz EDID,
   after a reboot HDMI-A-1 runs 2560x1440@59.58, 8 bpc RGB, as the preferred
-  mode; LightDM greeter on Xorg.
+  mode, confirmed visually clean; LightDM greeter on Xorg.
 - Not validated: HDMI1, DP, audio, suspend, PCIe/NVMe, the second GMAC.
 - The SSD reports 3 reallocated and 3 pending sectors at 226 power-on hours
   (SMART PASSED, empty error log). Monitor with `smartctl -A /dev/sda`.
