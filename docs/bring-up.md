@@ -33,6 +33,18 @@ Image build success and these checks do not establish a hardware boot.
   persist with this eMMC-backed firmware, but fallback runs before
   ExitBootServices, where writes are saved on reset.
 
+## Unlabeled files (fixed 2026-10-23)
+
+The first image relied on `/.autorelabel`. The chroot's `rpm` could not label
+files on the SELinux-less build host, so about 11,000 files (including
+`systemd`) had no label. Enforcing boot failed with `Failed to allocate
+manager object` before the relabel could run. The builder now labels offline
+with `setfiles`, once for each Btrfs subvolume, and verifies the result.
+
+A disk written from the unlabeled image can be recovered at the board: in
+GRUB press `e`, append `enforcing=0` to the kernel options, and boot with
+Ctrl-X. The pending autorelabel then runs and reboots into enforcing mode.
+
 ## Diagnostics after first boot
 
 ```bash

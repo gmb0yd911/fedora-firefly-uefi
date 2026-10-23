@@ -67,7 +67,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-for cmd in xz sfdisk losetup partx mkfs.vfat mkfs.ext4 mkfs.btrfs btrfs rsync arch-chroot openssl blkid sha256sum; do
+for cmd in xz sfdisk losetup partx mkfs.vfat mkfs.ext4 mkfs.btrfs btrfs rsync arch-chroot openssl blkid sha256sum setfattr getfattr; do
   if ! command -v "$cmd" &>/dev/null; then
     echo "Error: Required command '$cmd' is not installed." >&2
     exit 1
@@ -279,8 +279,26 @@ rm -f "${DST}/etc/resolv.conf"
 if [[ -n "${RESOLV_BACKUP}" ]]; then ln -s "${RESOLV_BACKUP}" "${DST}/etc/resolv.conf"; fi
 # Later kernels installed on the board may use normal host-only initramfs images.
 rm -f "${DST}/etc/dracut.conf.d/90-firefly-build-generic.conf"
-# Files written from the build host need SELinux labels.
-touch "${DST}/.autorelabel"
+
+# The build host runs without SELinux, so rpm leaves every file it installs
+# unlabeled; an enforcing boot then fails before a first-boot relabel can run.
+# Label offline with the image's own policy. setfiles does not cross into
+# other Btrfs subvolumes, so each mountpoint is listed.
+echo "Applying SELinux labels..."
+LABEL_PATHS=(/boot)
+for entry in "${SUBVOLS[@]}"; do LABEL_PATHS+=("${entry#*:}"); done
+arch-chroot "${DST}" setfiles -F -e /proc -e /sys -e /dev -e /run -e /tmp -e /boot/efi \
+  /etc/selinux/targeted/contexts/files/file_contexts "${LABEL_PATHS[@]}" || true
+# arch-chroot bind-mounts over /etc/resolv.conf, so label the symlink itself here.
+setfattr -h -n security.selinux -v system_u:object_r:net_conf_t:s0 "${DST}/etc/resolv.conf"
+unlabeled=$(for p in "${LABEL_PATHS[@]}"; do find "${DST}${p}" -xdev -print0; done \
+  | xargs -0 getfattr -h -n security.selinux --absolute-names 2>&1 \
+  | grep 'No such attribute' | grep -v '/var/lib/nfs/rpc_pipefs' || true)
+if [[ -n "${unlabeled}" ]]; then
+  echo "Error: Files without SELinux labels:" >&2
+  head -20 <<<"${unlabeled}" >&2
+  exit 1
+fi
 
 # --- 6. Verify boot configuration -------------------------------------------------
 echo "[7/8] Verifying boot entries..."
@@ -329,5 +347,5 @@ echo " Built: ${IMG_FILE}"
 [[ "${COMPRESS_IMAGE}" == 1 ]] && echo "        ${IMG_FILE}.zst"
 echo " Root UUID: ${ROOT_UUID}   Boot UUID: ${BOOT_UUID}   ESP UUID: ${ESP_UUID}"
 echo " User: ${FEDORA_USER} ($([[ -n "${PASSWORD_HASH}" ]] && echo password || echo 'SSH key only, NOPASSWD sudo'))"
-echo " First boot performs an SELinux relabel and reboots once."
+echo " SELinux labels applied offline; no first-boot relabel is needed."
 echo "===================================================================="

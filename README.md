@@ -68,7 +68,9 @@ about 6 GiB allocated) and `.img.zst` when there is room to compress it. The
 deployer compresses a raw image in transit when the board has `zstd`. The
 build needs 14 GiB free.
 
-Inside the chroot, os-prober is disabled: it would otherwise add the build
+SELinux labels are applied offline with the image's own policy, and the
+build fails if any file is left unlabeled: the build host has no SELinux, so
+`rpm` cannot label what it installs. Inside the chroot, os-prober is disabled: it would otherwise add the build
 host's disks to `grub.cfg`.
 
 ## Deploy
@@ -93,8 +95,7 @@ contains EDK2, and requires typing the device path to confirm.
 2. F12 → the SATA disk. Shim's fallback loader creates a `Fedora` boot
    entry and resets once; after that, Fedora may be first in boot order.
    Use F12 to choose PVE on eMMC.
-3. SELinux relabels the system (`/.autorelabel`) and reboots once.
-4. LightDM (slick-greeter) starts Cinnamon. SSH is enabled with the
+3. LightDM (slick-greeter) starts Cinnamon. SSH is enabled with the
    build user's key.
 
 See [docs/bring-up.md](docs/bring-up.md) for what is and isn't validated
