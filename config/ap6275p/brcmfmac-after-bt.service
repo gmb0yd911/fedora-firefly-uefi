@@ -1,0 +1,12 @@
+# The AP6275P Wi-Fi firmware needs the 32 kHz LPO that hci_uart_bcm enables
+# for Bluetooth, so load brcmfmac once hci0 exists.
+[Unit]
+Description=Load brcmfmac after Bluetooth enables the AP6275P LPO clock
+ConditionKernelVersion=!*-vendor-*
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/modprobe brcmfmac
+
+[Install]
+WantedBy=sys-subsystem-bluetooth-devices-hci0.device

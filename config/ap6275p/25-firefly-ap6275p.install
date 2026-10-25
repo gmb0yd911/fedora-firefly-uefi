@@ -1,0 +1,22 @@
+#!/bin/bash
+# kernel-install plugin, installed as /etc/kernel/install.d/25-firefly-ap6275p.install.
+# 20-grub.install copies the kernel's DTBs to /boot/dtb-<kver> and points the
+# BLS entry at GRUB_DEVICETREE (rk3588-firefly-itx-3588j-ap6275p.dtb); write
+# that file as the stock board DTB plus the AP6275P Wi-Fi/Bluetooth nodes.
+# If patching fails, install the stock DTB under that name so the kernel
+# still boots, without Wi-Fi and Bluetooth.
+COMMAND="$1"
+KERNEL_VERSION="$2"
+[[ "${COMMAND}" == add ]] || exit 0
+
+dir=/boot/dtb-${KERNEL_VERSION}/rockchip
+src=${dir}/rk3588-firefly-itx-3588j.dtb
+out=${dir}/rk3588-firefly-itx-3588j-ap6275p.dtb
+if [[ ! -f "${src}" ]]; then
+  echo "25-firefly-ap6275p: ${src} not found" >&2
+  exit 1
+fi
+if ! /usr/local/sbin/firefly-dt-ap6275p "${src}" "${out}"; then
+  echo "25-firefly-ap6275p: patch failed; installing the stock DTB as ${out}" >&2
+  cp "${src}" "${out}"
+fi

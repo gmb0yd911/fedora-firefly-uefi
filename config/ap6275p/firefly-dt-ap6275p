@@ -1,0 +1,106 @@
+#!/bin/sh
+# firefly-dt-ap6275p IN.dtb OUT.dtb
+#
+# The same script is kept in pve-firefly-uefi (config/mainline-kernel/);
+# change both together.
+#
+# Describe the Firefly ITX-3588J's AP6275P (BCM43752) in a mainline
+# rk3588-firefly-itx-3588j.dtb, using node paths so it also works on DTBs
+# built without __symbols__ (Debian, Fedora). Wiring from the vendor DT:
+#   - Wi-Fi on pcie2x1l0 (/pcie@fe170000), WL_REG_ON = GPIO0_C4;
+#   - Bluetooth on uart6 (/serial@feb90000, m1 pins with RTS/CTS),
+#     BT_REG_ON = GPIO0_C6, BT_WAKE = GPIO0_C5, 32 kHz LPO from the hym8563.
+# Combo PHY 1 serves either sata1 or pcie2x1l0; mainline enables both and
+# the built-in AHCI driver takes the PHY first, so sata1 (unused on this
+# board, disabled in the vendor DT) is disabled here.
+set -eu
+
+[ $# -eq 2 ] || { echo "usage: $0 IN.dtb OUT.dtb" >&2; exit 2; }
+in=$1 out=$2
+tmp=$(mktemp "${out}.XXXXXX")
+trap 'rm -f "${tmp}"' EXIT
+cp "${in}" "${tmp}"
+
+GPIO0=/pinctrl/gpio@fd8a0000
+UART6=/serial@feb90000
+PCIE=/pcie@fe170000
+SATA1=/sata@fe220000
+RTC=/i2c@fec80000/rtc@51
+PINS=/pinctrl/uart6
+REG=/regulator-wifi-reg-on
+
+for n in "${GPIO0}" "${UART6}" "${PCIE}" "${SATA1}" "${RTC}" \
+         "${PINS}/uart6m1-xfer" /pinctrl/pcfg-pull-none; do
+  fdtget -l "${tmp}" "${n}" >/dev/null 2>&1 || { echo "$0: ${n} not found in ${in}" >&2; exit 1; }
+done
+if fdtget -l "${tmp}" "${REG}" >/dev/null 2>&1; then
+  echo "$0: ${in} already has ${REG}" >&2; exit 1
+fi
+
+# Highest phandle in the tree, so new ones do not collide.
+max=$(dtc -q -I dtb -O dts "${tmp}" | sed -n 's/.*phandle = <\(0x[0-9a-f]*\)>;.*/\1/p' |
+      while read -r p; do printf '%d\n' "$p"; done | sort -n | tail -n1)
+next=$((max + 1))
+
+phandle() {  # set ph to the node's phandle, adding one when it has none
+  if p=$(fdtget -t x "${tmp}" "$1" phandle 2>/dev/null); then
+    ph=0x${p}
+  else
+    ph=$(printf '0x%x' "${next}")
+    fdtput -t x "${tmp}" "$1" phandle "${ph}"
+    next=$((next + 1))
+  fi
+}
+
+phandle "${GPIO0}"; gpio0=${ph}
+phandle "${RTC}"; rtc=${ph}
+phandle /pinctrl/pcfg-pull-none; pull_none=${ph}
+
+# Debian's DTB drops unreferenced pin groups; add the uart6m1 flow-control
+# pins with the values from the RK3588 pinctrl dtsi when they are missing.
+pins() {  # pins NAME BANK PIN FUNCTION
+  if ! fdtget -l "${tmp}" "${PINS}/$1" >/dev/null 2>&1; then
+    fdtput -c "${tmp}" "${PINS}/$1"
+    fdtput -t x "${tmp}" "${PINS}/$1" rockchip,pins "$2" "$3" "$4" "${pull_none}"
+  fi
+}
+pins uart6m1-ctsn 1 3 0xa   # GPIO1_A3
+pins uart6m1-rtsn 1 2 0xa   # GPIO1_A2
+
+phandle "${PINS}/uart6m1-xfer"; xfer=${ph}
+phandle "${PINS}/uart6m1-ctsn"; ctsn=${ph}
+phandle "${PINS}/uart6m1-rtsn"; rtsn=${ph}
+
+fdtput -t s "${tmp}" "${SATA1}" status disabled
+
+fdtput -c "${tmp}" "${REG}"
+fdtput -t s "${tmp}" "${REG}" compatible regulator-fixed
+fdtput -t s "${tmp}" "${REG}" regulator-name wifi_reg_on
+fdtput -t u "${tmp}" "${REG}" regulator-min-microvolt 3300000
+fdtput -t u "${tmp}" "${REG}" regulator-max-microvolt 3300000
+fdtput -t x "${tmp}" "${REG}" gpio "${gpio0}" 0x14 0     # GPIO0_C4 WL_REG_ON
+fdtput -t s "${tmp}" "${REG}" enable-active-high ""
+fdtput -t u "${tmp}" "${REG}" startup-delay-us 100000
+phandle "${REG}"; reg=${ph}
+fdtput -t x "${tmp}" "${PCIE}" vpcie3v3-supply "${reg}"
+
+fdtput -t s "${tmp}" "${UART6}" pinctrl-names default
+fdtput -t x "${tmp}" "${UART6}" pinctrl-0 "${xfer}" "${ctsn}" "${rtsn}"
+fdtput -t s "${tmp}" "${UART6}" uart-has-rtscts ""
+fdtput -t s "${tmp}" "${UART6}" status okay
+
+# The Bluetooth node is the only consumer of the 32 kHz LPO, which the Wi-Fi
+# firmware also needs; brcmfmac-after-bt.service loads brcmfmac once hci0
+# exists, after hci_uart_bcm has enabled the LPO.
+BT=${UART6}/bluetooth
+fdtput -c "${tmp}" "${BT}"
+fdtput -t s "${tmp}" "${BT}" compatible brcm,bcm4345c5
+fdtput -t x "${tmp}" "${BT}" clocks "${rtc}"
+fdtput -t s "${tmp}" "${BT}" clock-names lpo
+fdtput -t x "${tmp}" "${BT}" device-wakeup-gpios "${gpio0}" 0x15 0   # GPIO0_C5
+fdtput -t x "${tmp}" "${BT}" shutdown-gpios "${gpio0}" 0x16 0        # GPIO0_C6
+fdtput -t u "${tmp}" "${BT}" max-speed 1500000
+
+chmod 644 "${tmp}"
+mv "${tmp}" "${out}"
+trap - EXIT

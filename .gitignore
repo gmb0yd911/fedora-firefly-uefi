@@ -5,3 +5,4 @@ cache/*.raw.xz
 cache/*CHECKSUM
 __pycache__/
 output/SHA256SUMS
+cache/ap6275p/

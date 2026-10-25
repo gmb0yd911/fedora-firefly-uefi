@@ -32,10 +32,11 @@ and the Btrfs filesystem to fill the disk on first boot.
 ## Device tree
 
 `/etc/default/grub` sets
-`GRUB_DEVICETREE="rockchip/rk3588-firefly-itx-3588j.dtb"`. Fedora's
+`GRUB_DEVICETREE="rockchip/rk3588-firefly-itx-3588j-ap6275p.dtb"`. Fedora's
 `20-grub.install` then adds `devicetree /dtb-<kver>/rockchip/…` to every new
-BLS entry, so each kernel boots with its own matching DTB across `dnf`
-updates. GRUB installs it in place of the firmware's tree. To try the EDK2
+BLS entry. `25-firefly-ap6275p.install` then writes that file as the kernel's
+own board DTB plus the Wi-Fi/Bluetooth nodes (see below). Each kernel
+therefore boots with its own matching DTB across `dnf` updates. GRUB installs it in place of the firmware's tree. To try the EDK2
 firmware tree instead, press `e` in the GRUB menu and delete the
 `devicetree` line.
 
@@ -60,6 +61,42 @@ produced flickering red pixels. 240 MHz uses an integer divider
 For another monitor, set `EDID_FILE` and `HDMI_MODE`, preferring a pixel
 clock in the driver's table or a multiple of 2.4 MHz; `EDID_FILE=`
 disables the override.
+
+## Wi-Fi and Bluetooth (AP6275P)
+
+The board's AP6275P module is a BCM43752: Wi-Fi on `pcie2x1l0`, Bluetooth on
+UART6. Fedora's DTB describes neither. It also enables `sata1`, which shares
+combo PHY 1 with the Wi-Fi PCIe slot. The built-in AHCI driver takes the PHY
+first, so the Wi-Fi link never trains.
+
+`config/ap6275p/firefly-dt-ap6275p` adds the vendor DT's wiring by node
+path, because Fedora's DTBs have no `__symbols__`. It:
+
+- disables `sata1`;
+- adds the WL_REG_ON regulator (GPIO0_C4) as the slot's supply;
+- enables UART6 with RTS/CTS;
+- adds a serdev Bluetooth node with BT_REG_ON/BT_WAKE and the hym8563
+  32 kHz LPO.
+
+The same script is used by
+[pve-firefly-uefi](https://github.com/gmb0yd911/pve-firefly-uefi).
+
+The Wi-Fi firmware only starts once that LPO runs, and the Bluetooth driver
+enables it. So `brcmfmac` is blacklisted for automatic loading, and
+`brcmfmac-after-bt.service` loads it when `hci0` appears. The builder also
+installs `dtc` (for the kernel-install plugin) and enables
+`bluetooth.service`.
+
+Fedora's `linux-firmware` has no files for this module. The builder
+downloads them from
+[armbian/firmware](https://github.com/armbian/firmware) at commit
+`9934dbd5`, checks them against `config/ap6275p/firmware.sha256` and
+installs them in `/usr/lib/firmware/brcm/`:
+
+- `brcmfmac43752-pcie.{bin,clm_blob,txt}` for Wi-Fi;
+- `BCM4362A2.hcd` for Bluetooth.
+
+They are not stored in this repository.
 
 ## Build
 

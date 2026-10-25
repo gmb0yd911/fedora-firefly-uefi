@@ -22,7 +22,13 @@ IMG_SIZE_MIB="${IMG_SIZE_MIB:-16384}"
 ESP_SIZE_MIB=512
 BOOT_SIZE_MIB=1024
 
-DTB_PATH="rockchip/rk3588-firefly-itx-3588j.dtb"
+# Each kernel boots a copy of Fedora's board DTB with the AP6275P (BCM43752)
+# Wi-Fi and Bluetooth described, written by 25-firefly-ap6275p.install; see
+# config/ap6275p/firefly-dt-ap6275p.
+DTB_PATH="rockchip/rk3588-firefly-itx-3588j-ap6275p.dtb"
+# Fedora's linux-firmware lacks the AP6275P files; fetch them from
+# armbian/firmware at a fixed commit and check config/ap6275p/firmware.sha256.
+AP6275P_FW_URL="https://raw.githubusercontent.com/armbian/firmware/9934dbd5541bb49e2063089437a981f752c87b7f/brcm"
 EXTRA_KERNEL_ARGS="${EXTRA_KERNEL_ARGS:-console=ttyS2,1500000n8 console=tty0}"
 # HDMI0's DDC read fails on this board, so supply the monitor's EDID.
 # The default is the Dell P2720DC EDID with its 2560x1440 timing moved from
@@ -81,7 +87,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-for cmd in xz sfdisk losetup partx mkfs.vfat mkfs.ext4 mkfs.btrfs btrfs rsync arch-chroot openssl blkid sha256sum setfattr getfattr; do
+for cmd in xz sfdisk losetup partx mkfs.vfat mkfs.ext4 mkfs.btrfs btrfs rsync arch-chroot openssl blkid sha256sum setfattr getfattr fdtget; do
   if ! command -v "$cmd" &>/dev/null; then
     echo "Error: Required command '$cmd' is not installed." >&2
     exit 1
@@ -132,6 +138,11 @@ cd "${CACHE_DIR}"
 [[ -f "${BASE_NAME}" ]] || curl -fSLO "${BASE_URL}/${BASE_NAME}"
 echo "[1/8] Verifying ${BASE_NAME}..."
 grep -F "(${BASE_NAME})" "${CHECKSUM_NAME}" | sha256sum -c -
+mkdir -p ap6275p
+while read -r _ name; do
+  [[ -f "ap6275p/${name}" ]] || curl -fsSL -o "ap6275p/${name}" "${AP6275P_FW_URL}/${name}"
+done < "${CONFIG_DIR}/ap6275p/firmware.sha256"
+(cd ap6275p && sha256sum -c --quiet "${CONFIG_DIR}/ap6275p/firmware.sha256")
 cd "${SCRIPT_DIR}"
 
 BASE_RAW="${WORK}/base.raw"
@@ -233,6 +244,13 @@ if [[ -n "${EDID_FILE}" ]]; then
   install -Dm644 "${EDID_FILE}" "${DST}/usr/lib/firmware/edid/${EDID_NAME}"
   sed "s|@EDID_NAME@|${EDID_NAME}|" "${CONFIG_DIR}/dracut-edid.conf.in" > "${DST}/etc/dracut.conf.d/90-firefly-edid.conf"
 fi
+install -Dm755 "${CONFIG_DIR}/ap6275p/firefly-dt-ap6275p" "${DST}/usr/local/sbin/firefly-dt-ap6275p"
+install -Dm755 "${CONFIG_DIR}/ap6275p/25-firefly-ap6275p.install" "${DST}/etc/kernel/install.d/25-firefly-ap6275p.install"
+install -Dm644 "${CONFIG_DIR}/ap6275p/brcmfmac-after-bt.conf" "${DST}/etc/modprobe.d/brcmfmac-after-bt.conf"
+install -Dm644 "${CONFIG_DIR}/ap6275p/brcmfmac-after-bt.service" "${DST}/etc/systemd/system/brcmfmac-after-bt.service"
+while read -r _ name; do
+  install -Dm644 "${CACHE_DIR}/ap6275p/${name}" "${DST}/usr/lib/firmware/brcm/${name}"
+done < "${CONFIG_DIR}/ap6275p/firmware.sha256"
 echo "${FEDORA_HOSTNAME}" > "${DST}/etc/hostname"
 
 # --- 5. Packages and accounts inside the aarch64 chroot ---------------------------
@@ -253,6 +271,8 @@ arch-chroot "${DST}" /usr/bin/env \
   /bin/bash -euo pipefail <<'CHROOT'
 dnf() { command dnf -y --setopt=install_weak_deps=True "$@"; }
 
+# fdtput for 25-firefly-ap6275p.install, before any new kernel arrives.
+dnf install dtc
 if [[ "${UPDATE_SYSTEM}" == 1 ]]; then
   dnf upgrade --refresh
 fi
@@ -266,7 +286,12 @@ dnf install cloud-utils-growpart btrfs-progs
 
 systemctl set-default graphical.target
 systemctl enable lightdm.service sshd.service firefly-growroot.service
+systemctl enable bluetooth.service brcmfmac-after-bt.service
 systemctl disable initial-setup.service 2>/dev/null || true
+# Kernels present before the plugin was installed (the base image's).
+for kver in $(ls /lib/modules); do
+  [[ -d "/boot/dtb-${kver}" ]] && /etc/kernel/install.d/25-firefly-ap6275p.install add "${kver}"
+done
 
 if ! id "${FEDORA_USER}" &>/dev/null; then
   useradd -m -G wheel -c "${FEDORA_USER}" "${FEDORA_USER}"
@@ -330,6 +355,8 @@ for e in "${entries[@]}"; do
   opts=$(sed -n 's/^options //p' "$e")
   echo "  ${kver}: devicetree=${dtb:-<none>}"
   [[ -n "${dtb}" && -f "${DST}/boot${dtb}" ]] || { echo "    Error: device tree missing." >&2; status=1; }
+  [[ "${dtb}" == "/dtb-${kver}/${DTB_PATH}" ]] && fdtget -t s "${DST}/boot${dtb}" /regulator-wifi-reg-on regulator-name &>/dev/null \
+    || { echo "    Error: device tree lacks the AP6275P nodes." >&2; status=1; }
   [[ -f "${DST}/boot/vmlinuz-${kver}" && -f "${DST}/boot/initramfs-${kver}.img" ]] || { echo "    Error: kernel/initramfs missing." >&2; status=1; }
   [[ "${opts}" == "${CMDLINE}" ]] || { echo "    Error: unexpected options: ${opts}" >&2; status=1; }
 done
@@ -340,6 +367,12 @@ fi
 chroot_lightdm=$(readlink "${DST}/etc/systemd/system/display-manager.service" || true)
 echo "  display-manager -> ${chroot_lightdm:-<none>}"
 [[ "${chroot_lightdm}" == *lightdm.service ]] || { echo "Error: LightDM not enabled." >&2; status=1; }
+for f in "${DST}/etc/systemd/system/bluetooth.target.wants/bluetooth.service" \
+         "${DST}/etc/systemd/system/sys-subsystem-bluetooth-devices-hci0.device.wants/brcmfmac-after-bt.service"; do
+  [[ -L "$f" ]] || { echo "Error: $(basename "$f") not enabled." >&2; status=1; }
+done
+(cd "${DST}/usr/lib/firmware/brcm" && sha256sum -c --quiet "${CONFIG_DIR}/ap6275p/firmware.sha256") \
+  || { echo "Error: AP6275P firmware missing or changed." >&2; status=1; }
 [[ ${status} -eq 0 ]] || exit 1
 
 echo "[8/8] Unmounting..."

@@ -45,6 +45,24 @@ HDMI connected:
   after a reboot HDMI-A-1 runs 2560x1440@59.58, 8 bpc RGB, as the preferred
   mode, confirmed visually clean; LightDM greeter on Xorg.
 - Not validated: HDMI1, DP, audio, suspend, PCIe/NVMe, the second GMAC.
+
+## Wi-Fi and Bluetooth (added 2026-10-25)
+
+The AP6275P support (`config/ap6275p/`) was developed on the same board
+under Arch Linux ARM with `linux-aarch64` 7.2.11, the same kernel version
+as this image. There:
+
+- the BCM43752 enumerated on `0002:21:00.0`;
+- `brcmfmac` started firmware 18.35.387.23.146 and scanned 2.4/5 GHz
+  networks;
+- Bluetooth loaded `BCM4362A2.hcd` and `hci0` was powered.
+
+`firefly-dt-ap6275p` was run on the 7.2.11 and 6.19.10 DTBs from the
+built image. All phandle references resolved, with no duplicates.
+
+Not yet established for Fedora: an image built with these changes, and a
+Fedora boot using them. The installed Fedora disk was not attached when
+they were made.
 - The SSD reports 3 reallocated and 3 pending sectors at 226 power-on hours
   (SMART PASSED, empty error log). Monitor with `smartctl -A /dev/sda`.
 
