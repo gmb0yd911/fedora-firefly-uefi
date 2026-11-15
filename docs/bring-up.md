@@ -78,6 +78,37 @@ A disk written from the unlabeled image can be recovered at the board: in
 GRUB press `e`, append `enforcing=0` to the kernel options, and boot with
 Ctrl-X. The pending autorelabel then runs and reboots into enforcing mode.
 
+## Black screen on the top HDMI port (2026-11-15)
+
+After U-Boot testing and an EDK2 v1.1 reflash, the system booted and
+LightDM ran, but the display stayed black after GRUB even though the UEFI
+menu had shown on the same monitor. Force Output and Config Table Mode
+were reset to the documented values; that did not help.
+
+- `card0-HDMI-A-1` was `disconnected` and the `dw-hdmi-qp-hpd` interrupt
+  count stayed at 0, even when the cable was replugged; Xorg fell back to a
+  headless 1024x768 screen.
+- The HDMI0 HPD level in SYS_GRF `SOC_STATUS1` (`0xfd58c384`, bit 16)
+  was 0. The monitor was on the top port, which is HDMI1 (`fdea0000`),
+  disabled in Fedora's DTB.
+- Moving the cable to the bottom port (HDMI0) set bit 16 to 1 and gave
+  `connected`, an HPD interrupt and 2560x1440 at 240 MHz.
+- Bit 24 (HDMI1 HPD level) read 1 with the cable on either port, so it
+  does not show where the monitor is while HDMI1 is disabled.
+
+LightDM does not reconfigure its Xorg server when the monitor appears after
+it starts. If the cable is moved while Fedora is running, run
+`sudo systemctl restart lightdm`.
+
+To check whether HDMI0 sees hot-plug, read bit 16 (root, read-only;
+1 = monitor detected):
+
+```bash
+sudo python3 -c 'import mmap,os,struct
+m=mmap.mmap(os.open("/dev/mem",os.O_RDONLY|os.O_SYNC),4096,mmap.MAP_SHARED,mmap.PROT_READ,offset=0xfd58c000)
+print("HDMI0 HPD", struct.unpack("<I",m[0x384:0x388])[0]>>16&1)'
+```
+
 ## Diagnostics after first boot
 
 ```bash

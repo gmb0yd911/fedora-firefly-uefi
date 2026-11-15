@@ -148,12 +148,16 @@ contains EDK2, and requires typing the device path to confirm.
 
 ## First boot
 
-1. In UEFI setup keep **Config Table Mode = Device Tree** and
+1. Connect the monitor to the **bottom HDMI port (HDMI0)**. The top port
+   is HDMI1, which Fedora's DTB leaves disabled: EDK2 and GRUB still show
+   on it, but Linux then gives a black screen.
+2. In UEFI setup keep **Config Table Mode = Device Tree** and
    **Display → Force Output = Disabled** (as already saved for PVE).
-2. F12 → the SATA disk. Shim's fallback loader creates a `Fedora` boot
+   Reflashing the EDK2 image resets these to defaults.
+3. F12 → the SATA disk. Shim's fallback loader creates a `Fedora` boot
    entry and resets once; after that, Fedora may be first in boot order.
    Use F12 to choose PVE on eMMC.
-3. LightDM (slick-greeter) starts Cinnamon. SSH is enabled with the
+4. LightDM (slick-greeter) starts Cinnamon. SSH is enabled with the
    build user's key.
 
 See [docs/bring-up.md](docs/bring-up.md) for what is and isn't validated
