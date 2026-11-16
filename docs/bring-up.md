@@ -90,12 +90,11 @@ worked in any configuration since, including Firefly's stock firmware.
   sequence. The chip still did not answer HCI Reset (`01 03 0c 00`) in
   45 s.
 
-The test DTBs left in `/boot/dtb-7.2.11-200.fc44.aarch64/rockchip/` are not
-the HDMI1 experiment:
+The test DTBs that were in `/boot/dtb-7.2.11-200.fc44.aarch64/rockchip/`
+(deleted 2026-11-16) were not the HDMI1 experiment:
 
 - `-test.dtb` (Nov 1) is an earlier AP6275P patch built from another
-  source. It also disables `tsadc`, the SoC's thermal sensor, so do not
-  boot it.
+  source. It also disabled `tsadc`, the SoC's thermal sensor.
 - `-test1.dtb` and `-test2.dtb` (Nov 4) are recovery attempts: an `lpo`
   clock on the PCIe node, a longer WL_REG_ON delay and Bluetooth autobaud.
 
@@ -111,9 +110,16 @@ sudo systemctl disable brcmfmac-after-bt.service
 sudo rm /etc/kernel/install.d/25-firefly-ap6275p.install \
   /etc/modprobe.d/brcmfmac-after-bt.conf
 sudo sed -i 's|^GRUB_DEVICETREE=.*|GRUB_DEVICETREE="rockchip/rk3588-firefly-itx-3588j.dtb"|' /etc/default/grub
-sudo sed -i 's|/rk3588-firefly-itx-3588j-ap6275p.dtb$|/rk3588-firefly-itx-3588j.dtb|' /boot/loader/entries/*.conf
+# The entries directory is root-only, so expand the glob as root.
+sudo sh -c "sed -i 's|/rk3588-firefly-itx-3588j-ap6275p.dtb\$|/rk3588-firefly-itx-3588j.dtb|' /boot/loader/entries/*.conf"
 sudo grub2-mkconfig -o /boot/grub2/grub.cfg
 ```
+
+This was done on the installed SSD on 2026-11-16, using `sudo sh -c` for
+the glob. SELinux was enforcing, and the edited files kept their labels.
+The default 7.2.11 entry and the 6.19.10 entry now use the stock DTB.
+The leftover `…-test1.conf` and `…-test2.conf` BLS entries were deleted
+along with the three test DTBs, and `grub.cfg` was regenerated.
 
 ## Unlabeled files (fixed 2026-10-23)
 
