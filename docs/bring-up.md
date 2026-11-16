@@ -83,6 +83,13 @@ worked in any configuration since, including Firefly's stock firmware.
   on GPIO1_B4 as in the vendor DT, and the hym8563 CLKOUT was enabled at
   32.768 kHz (register `0x0d` = `0x80`).
 
+- PVE vendor kernel, 2026-11-16: the Beryllium wiki fix
+  (<https://wiki.beryllium.gr/itx-3588j/Bluetooth-Fix>) was tested. That
+  fix is `brcm_patchram_plus` on `/dev/ttyS6`, already Armbian's setting,
+  after an rfkill power cycle. The vendor driver ran its full BT power
+  sequence. The chip still did not answer HCI Reset (`01 03 0c 00`) in
+  45 s.
+
 The test DTBs left in `/boot/dtb-7.2.11-200.fc44.aarch64/rockchip/` are not
 the HDMI1 experiment:
 
