@@ -66,6 +66,48 @@ they were made.
 - The SSD reports 3 reallocated and 3 pending sectors at 226 power-on hours
   (SMART PASSED, empty error log). Monitor with `smartctl -A /dev/sda`.
 
+## AP6275P not responding (since early November 2026)
+
+The module worked under Arch Linux ARM on 2026-10-25 (above). According to
+the user, it stopped after a crash during HDMI1 experiments and has not
+worked in any configuration since, including Firefly's stock firmware.
+
+- Fedora with the AP6275P DTB: on every boot from 2026-11-01 onwards,
+  Bluetooth failed with `hci0: command 0xfc18 tx timeout` and Wi-Fi never
+  loaded firmware.
+- PVE on eMMC: the vendor kernel's `rk3588-bluetooth.service` failed
+  (2026-10-21 and 2026-11-15). Under Debian 7.2.9 with the same patch, the
+  PCIe slot trained a bridge but nothing enumerated, and Bluetooth timed
+  out after a driver rebind and after a cold power cycle. WL_REG_ON,
+  BT_REG_ON and BT_WAKE were high, UART6 m1 was muxed, the PCIe reset was
+  on GPIO1_B4 as in the vendor DT, and the hym8563 CLKOUT was enabled at
+  32.768 kHz (register `0x0d` = `0x80`).
+
+The test DTBs left in `/boot/dtb-7.2.11-200.fc44.aarch64/rockchip/` are not
+the HDMI1 experiment:
+
+- `-test.dtb` (Nov 1) is an earlier AP6275P patch built from another
+  source. It also disables `tsadc`, the SoC's thermal sensor, so do not
+  boot it.
+- `-test1.dtb` and `-test2.dtb` (Nov 4) are recovery attempts: an `lpo`
+  clock on the PCIe node, a longer WL_REG_ON delay and Bluetooth autobaud.
+
+The DTB that crashed was not found, so what damaged the module is unknown.
+Do not enable HDMI1 again before that is understood.
+
+New images are built with `AP6275P=0`. To remove the setup from the
+installed SSD, run this on the booted Fedora system rather than offline,
+so SELinux labels stay correct:
+
+```bash
+sudo systemctl disable brcmfmac-after-bt.service
+sudo rm /etc/kernel/install.d/25-firefly-ap6275p.install \
+  /etc/modprobe.d/brcmfmac-after-bt.conf
+sudo sed -i 's|^GRUB_DEVICETREE=.*|GRUB_DEVICETREE="rockchip/rk3588-firefly-itx-3588j.dtb"|' /etc/default/grub
+sudo sed -i 's|/rk3588-firefly-itx-3588j-ap6275p.dtb$|/rk3588-firefly-itx-3588j.dtb|' /boot/loader/entries/*.conf
+sudo grub2-mkconfig -o /boot/grub2/grub.cfg
+```
+
 ## Unlabeled files (fixed 2026-10-23)
 
 The first image relied on `/.autorelabel`. The chroot's `rpm` could not label

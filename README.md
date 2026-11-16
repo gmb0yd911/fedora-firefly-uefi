@@ -32,11 +32,13 @@ and the Btrfs filesystem to fill the disk on first boot.
 ## Device tree
 
 `/etc/default/grub` sets
-`GRUB_DEVICETREE="rockchip/rk3588-firefly-itx-3588j-ap6275p.dtb"`. Fedora's
+`GRUB_DEVICETREE="rockchip/rk3588-firefly-itx-3588j.dtb"`. Fedora's
 `20-grub.install` then adds `devicetree /dtb-<kver>/rockchip/…` to every new
-BLS entry. `25-firefly-ap6275p.install` then writes that file as the kernel's
-own board DTB plus the Wi-Fi/Bluetooth nodes (see below). Each kernel
-therefore boots with its own matching DTB across `dnf` updates. GRUB installs it in place of the firmware's tree. To try the EDK2
+BLS entry. Each kernel therefore boots with its own matching DTB across `dnf`
+updates. With `AP6275P=1` the builder points it at
+`rk3588-firefly-itx-3588j-ap6275p.dtb` instead, which
+`25-firefly-ap6275p.install` writes as the kernel's board DTB plus the
+Wi-Fi/Bluetooth nodes (see below). GRUB installs it in place of the firmware's tree. To try the EDK2
 firmware tree instead, press `e` in the GRUB menu and delete the
 `devicetree` line.
 
@@ -63,6 +65,13 @@ clock in the driver's table or a multiple of 2.4 MHz; `EDID_FILE=`
 disables the override.
 
 ## Wi-Fi and Bluetooth (AP6275P)
+
+**Not working on this board; off by default (`AP6275P=0`).** The module
+stopped responding after a crash during HDMI1 experiments in early
+November 2026. Since then it has failed in every configuration, including
+Firefly's stock firmware. See [docs/bring-up.md](docs/bring-up.md). The
+support below is kept for a replacement module and is built only with
+`AP6275P=1`.
 
 The board's AP6275P module is a BCM43752: Wi-Fi on `pcie2x1l0`, Bluetooth on
 UART6. Fedora's DTB describes neither. It also enables `sata1`, which shares
@@ -117,6 +126,7 @@ The builder prompts for the Fedora user's password. Settings:
 | `FEDORA_HOSTNAME` | `firefly-fedora` |
 | `UPDATE_SYSTEM` | `1` (`dnf upgrade` during build) |
 | `EXTRA_KERNEL_ARGS` | `console=ttyS2,1500000n8 console=tty0` |
+| `AP6275P` | `0`; `1` adds the AP6275P DTB patch, firmware and loader service |
 | `EDID_FILE` | `config/edid/dell_p2720dc-240mhz.bin`; empty disables the override |
 | `HDMI_CONNECTOR` / `HDMI_MODE` | `HDMI-A-1` / `2560x1440` |
 | `IMG_SIZE_MIB` | `16384` |
