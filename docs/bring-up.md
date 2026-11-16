@@ -121,6 +121,13 @@ The default 7.2.11 entry and the 6.19.10 entry now use the stock DTB.
 The leftover `…-test1.conf` and `…-test2.conf` BLS entries were deleted
 along with the three test DTBs, and `grub.cfg` was regenerated.
 
+After a reboot on the stock DTB (2026-11-16), the system reached `running`
+with no failed units and SELinux enforcing. `sata1` was `okay` and nothing
+was logged for `hci0`. With the monitor on the bottom port (HDMI0),
+HDMI-A-1 was `connected` at boot. Xorg used 2560x1440 at 240 MHz
+(`tmds_char_rate=240000000`), and the LightDM greeter came up without a
+restart. The user confirmed visually that the login screen was clean.
+
 ## Unlabeled files (fixed 2026-10-23)
 
 The first image relied on `/.autorelabel`. The chroot's `rpm` could not label
